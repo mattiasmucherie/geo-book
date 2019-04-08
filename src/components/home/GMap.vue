@@ -4,12 +4,14 @@
   </v-content>
 </template>
 <script>
+import firebase from "firebase";
+import db from "@/firebase/init";
 export default {
   name: "Gmap",
   data() {
     return {
-      lat: 59.31522,
-      lng: 18.03184
+      lat: 70.31522,
+      lng: 58.03184
     };
   },
   methods: {
@@ -19,13 +21,73 @@ export default {
           lat: this.lat,
           lng: this.lng
         },
-        zoom: 10,
+        zoom: 13,
         streetViewControl: false
       });
+      db.collection("users")
+        .get()
+        .then(users => {
+          users.docs.forEach(doc => {
+            let data = doc.data();
+            if (data.geolocation) {
+              let marker = new google.maps.Marker({
+                map: map,
+                position: {
+                  lat: data.geolocation.lat,
+                  lng: data.geolocation.lng
+                },
+                title: data.alias
+              });
+              // add click event to marker
+              marker.addListener("click", () => {
+                console.log(doc.id);
+              });
+            }
+          });
+        });
     }
   },
   mounted() {
-    this.renderMap();
+    // get current user
+    let user = firebase.auth().currentUser;
+
+    // get user geolocation
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        pos => {
+          this.lng = pos.coords.longitude;
+          this.lat = pos.coords.latitude;
+
+          //find the user record and then update geocords
+          db.collection("users")
+            .where("user_id", "==", user.uid)
+            .get()
+            .then(snapshot => {
+              snapshot.forEach(doc => {
+                db.collection("users")
+                  .doc(doc.id)
+                  .update({
+                    geolocation: {
+                      lat: pos.coords.latitude,
+                      lng: pos.coords.longitude
+                    }
+                  });
+              });
+            })
+            .then(() => {
+              this.renderMap();
+            });
+        },
+        err => {
+          console.log(err);
+          this.renderMap();
+        },
+        { maximumAge: 60000, timeout: 3000 }
+      );
+    } else {
+      // posistion center by default values
+      this.renderMap();
+    }
   }
 };
 </script>
